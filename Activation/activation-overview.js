@@ -10,7 +10,6 @@
   const flowCards = [...flow.querySelectorAll('[data-step]')];
   let activeStep = 0;
   let flowTimer = 0;
-  let flowHovered = false;
   let flowVisible = true;
 
   function stopFlow() {
@@ -38,24 +37,18 @@
 
   function scheduleFlow() {
     stopFlow();
-    if (reducedMotion.matches || document.hidden || !flowVisible || flowHovered || hasKeyboardFocus()) return;
+    if (reducedMotion.matches || document.hidden || !flowVisible || hasKeyboardFocus()) return;
     flowTimer = window.setTimeout(() => {
       selectStep((activeStep + 1) % flowCards.length);
       scheduleFlow();
     }, 3000);
   }
 
-  flow.addEventListener('pointerenter', (event) => {
-    if (event.pointerType === 'touch') return;
-    flowHovered = true;
-    stopFlow();
-  });
-  flow.addEventListener('pointerleave', () => {
-    flowHovered = false;
-    scheduleFlow();
-  });
   flowCards.forEach((card, index) => {
-    card.addEventListener('pointerenter', () => selectStep(index));
+    card.addEventListener('pointerenter', () => {
+      selectStep(index);
+      scheduleFlow();
+    });
     card.addEventListener('focus', () => {
       selectStep(index);
       scheduleFlow();

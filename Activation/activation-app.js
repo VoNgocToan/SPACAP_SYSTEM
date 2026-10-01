@@ -11,7 +11,7 @@
   const button = (label, action, cls = 'app-button') => `<button type="button" class="${cls}" data-action="${action}">${label}</button>`;
   const route = (id, label, cls = 'app-phone-tile') =>
     `<button type="button" class="${cls}" data-screen="${id}">${icon(screens.find((screen) => screen.id === id)?.icon || 'file')}<span>${label}</span></button>`;
-  const screens = [
+  const systemAScreens = [
     {
       id: 'login',
       group: 'Bắt đầu',
@@ -238,11 +238,47 @@
     },
   ];
 
-  const reportScreens = screens.filter((screen) => screen.group === 'Báo cáo phải hoàn thành' && screen.id !== 'required-reports');
   const primarySteps = ['login', 'home', 'store', 'sync', 'stores', 'store-detail'];
-  screens.forEach((screen) => {
+  systemAScreens.forEach((screen) => {
     if (!screen.step) screen.step = primarySteps.includes(screen.id) ? primarySteps.indexOf(screen.id) + 1 : 2;
   });
+  const systemSContent = window.ACTIVATION_SYSTEM_S_CONTENT || {};
+  const systemSScreens = systemAScreens.map((screen) => {
+    const customContent = systemSContent[screen.id] || {};
+    return {
+      ...screen,
+      ...customContent,
+      actions: customContent.actions ? [...customContent.actions] : screen.actions ? [...screen.actions] : undefined,
+    };
+  });
+  const shelfReportContent = systemSContent['shelf-report'] || {};
+  const shelfReportScreen = {
+    id: 'shelf-report',
+    step: 15,
+    reference: true,
+    group: 'Báo cáo phải hoàn thành',
+    title: 'Báo cáo ụ/kệ',
+    icon: 'inventory',
+    description: 'Ghi nhận tình trạng, số lượng và hình ảnh ụ/kệ tại điểm bán.',
+    actions: ['Mở màn hình Báo cáo ụ/kệ.', 'Nhập thông tin và ghi nhận hình ảnh thực tế.'],
+    result: 'Thông tin ụ/kệ được ghi nhận.',
+    ...shelfReportContent,
+    actions: shelfReportContent.actions
+      ? [...shelfReportContent.actions]
+      : ['Mở màn hình Báo cáo ụ/kệ.', 'Nhập thông tin và ghi nhận hình ảnh thực tế.'],
+  };
+  const competitorIndex = systemSScreens.findIndex((screen) => screen.id === 'competitor');
+  systemSScreens.forEach((screen) => {
+    if (screen.step > 14) screen.step += 1;
+  });
+  systemSScreens.splice(competitorIndex + 1, 0, shelfReportScreen);
+  const systems = {
+    a: { label: 'Hệ thống A', assetFolder: 'app-a', screens: systemAScreens },
+    s: { label: 'Hệ thống S', assetFolder: 'app-s', screens: systemSScreens },
+  };
+  let activeSystem = 'a';
+  let screens = systems[activeSystem].screens;
+  let reportScreens = screens.filter((screen) => screen.group === 'Báo cáo phải hoàn thành' && screen.id !== 'required-reports');
   const freshState = () => ({
     name: 'Nguyễn Minh Anh',
     username: 'activation.demo',
@@ -250,11 +286,13 @@
     inactive: false,
     changed: false,
     records: [],
-    visited: new Set(),
   });
-  let state = freshState(),
+  const systemStates = { a: freshState(), s: freshState() };
+  const systemCurrentScreens = { a: 'schedule', s: 'schedule' };
+  let state = systemStates[activeSystem],
     current = 0,
-    toastTimer;
+    toastTimer,
+    phoneImageAutoTimer;
   const modal = $('#app-modal');
   const imageDialog = $('#phone-image-dialog');
   const expandedImage = $('.app-image-expanded');
@@ -278,34 +316,43 @@
     $('#toast').textContent = message;
     $('#toast').classList.add('state-shown');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => $('#toast').classList.remove('state-shown'), 4500);
+    toastTimer = setTimeout(() => $('#toast').classList.remove('state-shown'), 2000);
   };
   const openModal = (title, content) => {
     $('#modal-title').textContent = title;
     $('#modal-body').innerHTML = content;
     if (!modal.open) modal.showModal();
   };
-  const groups = [...new Set(screens.map((screen) => screen.group))];
-  $('#journey-menu').innerHTML = groups
-    .map(
-      (group, index) =>
-        `<details class="app-journey-group" ${index < 2 ? 'open' : ''}><summary>${group}</summary><div class="app-journey-items">${screens
-          .filter((screen) => screen.group === group)
-          .map((screen, i) => route(screen.id, `${String(i + 1).padStart(2, '0')}. ${screen.title}`, 'app-journey-link'))
-          .join('')}</div></details>`,
-    )
-    .join('');
+  function renderJourneyMenu() {
+    const groups = [...new Set(screens.map((screen) => screen.group))];
+    $('#journey-menu').innerHTML = groups
+      .map(
+        (group, index) =>
+          `<details class="app-journey-group" ${index < 2 ? 'open' : ''}><summary>${group}</summary><div class="app-journey-items">${screens
+            .filter((screen) => screen.group === group)
+            .map((screen, i) => route(screen.id, `${String(i + 1).padStart(2, '0')}. ${screen.title}`, 'app-journey-link'))
+            .join('')}</div></details>`,
+      )
+      .join('');
+  }
 
   function loginDetail() {
+    const isSystemS = activeSystem === 's';
     const steps = [
-      ['user', 'create', '1. Admin tạo tài khoản', 'Cấp tên đăng nhập và mật khẩu tạm thời.'],
-      ['login', 'try-login', '2. Nhân viên đăng nhập', 'Sử dụng thông tin được Admin cung cấp.'],
-      ['lock', 'password', '3. Đổi mật khẩu lần đầu', 'Bắt buộc đổi mật khẩu để bảo vệ tài khoản.'],
-      ['home', 'home', '4. Truy cập Trang chủ', 'Bắt đầu sử dụng các chức năng được phân quyền.'],
+      ['user', 'create', '1. Admin tạo tài khoản', isSystemS ? 'Cấp tài khoản đăng nhập cho nhân viên.' : 'Cấp tên đăng nhập và mật khẩu tạm thời.'],
+      ['login', 'try-login', '2. Nhân viên đăng nhập', isSystemS ? 'Đăng nhập bằng tài khoản được Admin cấp.' : 'Sử dụng thông tin được Admin cung cấp.'],
+      [isSystemS ? 'home' : 'lock', isSystemS ? 'home' : 'password', isSystemS ? '3. Truy cập Trang chủ' : '3. Đổi mật khẩu lần đầu', isSystemS ? 'Sử dụng các chức năng theo quyền được cấp.' : 'Bắt buộc đổi mật khẩu để bảo vệ tài khoản.'],
+      [isSystemS ? 'lock' : 'home', isSystemS ? 'password' : 'home', isSystemS ? '4. Đổi mật khẩu' : '4. Truy cập Trang chủ', isSystemS ? 'Thay đổi mật khẩu tại mục Cá nhân khi cần.' : 'Bắt đầu sử dụng các chức năng được phân quyền.'],
     ];
-    return `<div class="app-login-flow">${steps.map(([glyph, action, title, text]) => `<button type="button" class="app-login-step" data-action="${action}">${icon(glyph)}<strong>${title}</strong><small>${text}</small></button>`).join('')}</div>
-      <article class="app-account-alert"><span class="app-alert-icon">${icon('key')}</span><div><strong>Quên mật khẩu</strong><p>Người dùng có thể chọn Quên mật khẩu hoặc liên hệ Admin để được reset mật khẩu.</p></div>${button('RESET MẬT KHẨU', 'reset', 'app-alert-action')}</article>
-      <article class="app-account-alert app-account-alert--inactive"><span class="app-alert-icon" aria-hidden="true">⊘</span><div><strong>Nhân viên nghỉ việc</strong><p>Admin chuyển tài khoản sang trạng thái Inactive. Nhân viên không thể tiếp tục đăng nhập vào App.</p></div>${button(state.inactive ? 'KÍCH HOẠT LẠI' : 'INACTIVE', 'inactive', 'app-alert-action')}</article>`;
+    const stepCards = steps.map(([glyph, action, title, text]) => {
+      const content = `${icon(glyph)}<strong>${title}</strong><small>${text}</small>`;
+      return isSystemS
+        ? `<article class="app-login-step">${content}</article>`
+        : `<button type="button" class="app-login-step" data-action="${action}">${content}</button>`;
+    }).join('');
+    return `<div class="app-login-flow">${stepCards}</div>
+      <article class="app-account-alert"><span class="app-alert-icon">${icon('key')}</span><div><strong>Quên mật khẩu</strong><p>${isSystemS ? 'Liên hệ Admin để được hỗ trợ đặt lại mật khẩu.' : 'Người dùng có thể chọn Quên mật khẩu hoặc liên hệ Admin để được reset mật khẩu.'}</p></div>${button('RESET MẬT KHẨU', 'reset', 'app-alert-action')}</article>
+      <article class="app-account-alert app-account-alert--inactive"><span class="app-alert-icon" aria-hidden="true">⊘</span><div><strong>Nhân viên nghỉ việc</strong><p>${isSystemS ? 'Admin chuyển tài khoản sang Inactive và ngừng quyền truy cập.' : 'Admin chuyển tài khoản sang trạng thái Inactive. Nhân viên không thể tiếp tục đăng nhập vào App.'}</p></div>${button(state.inactive ? 'KÍCH HOẠT LẠI' : 'INACTIVE', 'inactive', 'app-alert-action')}</article>`;
   }
   function quickTestDetail() {
     const steps = [
@@ -320,11 +367,10 @@
     const index = screens.findIndex((screen) => screen.id === id);
     if (index < 0) return;
     current = index;
+    systemCurrentScreens[activeSystem] = id;
     const screen = screens[current];
-    state.visited.add(id);
     document.querySelectorAll('.app-journey-link').forEach((link) => {
       const active = link.dataset.screen === id;
-      link.classList.toggle('state-visited', state.visited.has(link.dataset.screen));
       if (active) {
         link.setAttribute('aria-current', 'step');
         link.closest('details').open = true;
@@ -348,7 +394,7 @@
           ? quickTestDetail()
           : screen.reference
             ? `<div class="app-standard-detail"><section class="app-detail-section"><h3 class="app-detail-section-title">${icon('user')}<span>Người dùng thực hiện</span></h3><ul class="app-instruction-list">${actions.map((action) => `<li>${action}</li>`).join('')}</ul></section><section class="app-detail-section"><h3 class="app-detail-section-title">${icon('result')}<span>Kết quả</span></h3><p>${screen.result}</p>${id === 'required-reports' ? reportCards() : ''}</section></div>`
-            : `<div class="app-standard-detail"><h3 class="app-detail-section-title">${icon('user')}<span>Người dùng thực hiện</span></h3><ul class="app-instruction-list">${actions.map((action) => `<li>${action}</li>`).join('')}</ul><div class="app-result-box"><strong class="app-detail-section-title">${icon('result')}<span>KẾT QUẢ</span></strong>${screen.result}</div><div class="app-detail-shortcuts">${route('home', 'Trang chủ', 'app-button app-button--outline')}${route('store-report', 'Báo cáo đã lưu', 'app-button app-button--outline')}</div></div>`;
+            : `<div class="app-standard-detail"><h3 class="app-detail-section-title">${icon('user')}<span>Người dùng thực hiện</span></h3><ul class="app-instruction-list">${actions.map((action) => `<li>${action}</li>`).join('')}</ul><div class="app-result-box"><strong class="app-detail-section-title">${icon('result')}<span>KẾT QUẢ</span></strong>${screen.result}</div>${activeSystem === 's' && id === 'home' ? '' : `<div class="app-detail-shortcuts">${route('home', 'Trang chủ', 'app-button app-button--outline')}</div>`}</div>`;
     $('#next-step').textContent = current === screens.length - 1 ? 'Hoàn thành ✓' : 'Tiếp theo →';
     renderPhone();
     const activeLink = $('.app-journey-link[aria-current="step"]'),
@@ -372,7 +418,7 @@
   function phoneHeader(screen) {
     return `<div class="app-phone-toolbar"><button type="button" class="app-phone-back" data-action="phone-back" aria-label="Về bước trước">‹</button><strong>${screen.id === 'home' ? 'Activation' : escape(screen.title)}</strong><button type="button" class="app-phone-home" data-action="home" aria-label="Về Trang chủ">⌂</button></div>`;
   }
-  const phoneImageSets = {
+  const systemAPhoneImageSets = {
     login: [
       { form: true, label: 'Đăng nhập' },
       { src: 'assets/app-a/doimk.png', label: 'Đổi mật khẩu' },
@@ -457,7 +503,122 @@
       { src: 'assets/app-a/traffic3.png', label: 'Báo cáo Traffic — màn hình 4' },
     ],
   };
-  const phoneImageIndexes = Object.fromEntries(Object.keys(phoneImageSets).map((id) => [id, 0]));
+  const clonePhoneImageSets = (sets, assetFolder) =>
+    Object.fromEntries(
+      Object.entries(sets).map(([id, items]) => [
+        id,
+        items.map((item) => ({
+          ...item,
+          src: item.src?.replace('assets/app-a/', `assets/${assetFolder}/`),
+        })),
+      ]),
+    );
+  const systemSPhoneImageSets = clonePhoneImageSets(systemAPhoneImageSets, 'app-s');
+  const hiddenSystemSImages = new Set([
+    'llmct.png',
+    'llmct1.png',
+    'tonkho3.png',
+    'bcgia3.png',
+    'bcch1.png',
+    'bcch2.png',
+    'bh_qt3.png',
+    'bh_qt4.png',
+    'bh_qt5.png',
+  ]);
+  Object.keys(systemSPhoneImageSets).forEach((screenId) => {
+    systemSPhoneImageSets[screenId] = systemSPhoneImageSets[screenId].filter((item) => {
+      const fileName = item.src?.split('/').pop();
+      return !fileName || !hiddenSystemSImages.has(fileName);
+    });
+  });
+  // Tài liệu Hệ thống S: màn hình quản lý, danh sách sản phẩm và chi tiết sản phẩm.
+  systemSPhoneImageSets.documents = [
+    { src: 'assets/app-s/tlieu.png', label: 'Tài liệu — quản lý tài liệu' },
+    { src: 'assets/app-s/tlieu1.png', label: 'Tài liệu — thông tin sản phẩm' },
+    { src: 'assets/app-s/tlieu2.png', label: 'Tài liệu — chi tiết sản phẩm' },
+  ];
+  // Báo cáo Traffic Hệ thống S: dùng bộ ảnh mới và làm mới cache ảnh cũ.
+  systemSPhoneImageSets.traffic = [
+    { src: 'assets/app-s/traffic.png?v=20261001', label: 'Báo cáo Traffic — màn hình 1' },
+    { src: 'assets/app-s/traffic1.png?v=20261001', label: 'Báo cáo Traffic — màn hình 2' },
+    { src: 'assets/app-s/traffic2.png?v=20261001', label: 'Báo cáo Traffic — màn hình 3' },
+    { src: 'assets/app-s/traffic3.png?v=20261001', label: 'Báo cáo Traffic — màn hình 4' },
+  ];
+  // Bộ Báo cáo đối thủ dùng hai kiểu ảnh: ảnh đầy đủ có status bar và ảnh form đã bỏ status bar.
+  // Gắn crop riêng để tiêu đề "Chương trình khuyến mãi" không bị cắt mất.
+  systemSPhoneImageSets.competitor[0].cropStatusOnly = true;
+  systemSPhoneImageSets.competitor[1].uncropped = true;
+  systemSPhoneImageSets.competitor[2].cropStatusOnly = true;
+  // Báo cáo giá: chỉ bỏ thanh trạng thái (giờ, Wi-Fi, pin), giữ nguyên header ứng dụng.
+  systemSPhoneImageSets.price.forEach((item) => {
+    item.cropStatusOnly = true;
+  });
+  // Ảnh Báo cáo ụ/kệ: bỏ thanh trạng thái nhưng giữ nguyên header "Báo cáo thị phần".
+  systemSPhoneImageSets['shelf-report'] = [
+    { src: 'assets/app-s/bcuk.png', label: 'Báo cáo ụ/kệ — màn hình 1', cropStatusOnly: true },
+    { src: 'assets/app-s/bcuk1.png', label: 'Báo cáo ụ/kệ — màn hình 2', cropStatusOnly: true },
+    { src: 'assets/app-s/bcuk2.png', label: 'Báo cáo ụ/kệ — màn hình 3', cropStatusOnly: true },
+  ];
+  // Bán hàng và quà tặng: ba ảnh báo cáo đổi quà, sau đó là năm bước đổi quà.
+  systemSPhoneImageSets.sales = [
+    { src: 'assets/app-s/bhdq.jpg', label: 'Bán hàng và quà tặng — báo cáo đổi quà 1', cropStatusPercent: 7 },
+    { src: 'assets/app-s/bhdq1.jpg', label: 'Bán hàng và quà tặng — báo cáo đổi quà 2', cropStatusPercent: 6 },
+    { src: 'assets/app-s/bhdq2.jpg', label: 'Bán hàng và quà tặng — báo cáo đổi quà 3', cropStatusPercent: 5 },
+    { src: 'assets/app-s/bcdq.png', label: 'Bán hàng và quà tặng — đổi quà 1', cropStatusPercent: 7 },
+    { src: 'assets/app-s/bcdq1.png', label: 'Bán hàng và quà tặng — đổi quà 2', cropStatusPercent: 7 },
+    { src: 'assets/app-s/bcdq2.png', label: 'Bán hàng và quà tặng — đổi quà 3', cropStatusPercent: 7 },
+    { src: 'assets/app-s/bcdq3.png', label: 'Bán hàng và quà tặng — đổi quà 4', cropStatusPercent: 7 },
+    { src: 'assets/app-s/bcdq4.png', label: 'Bán hàng và quà tặng — đổi quà 5', cropStatusPercent: 7 },
+  ];
+  // Hệ thống S dùng chung ảnh cuahang.png cho Cửa hàng và Danh sách cửa hàng.
+  systemSPhoneImageSets.stores = [
+    { src: 'assets/app-s/cuahang.png', label: 'Danh sách cửa hàng Hệ thống S' },
+  ];
+  // Login của Hệ thống S là ảnh chụp toàn màn hình, không dùng form HTML của Hệ thống A.
+  systemSPhoneImageSets.login[0] = {
+    src: 'assets/app-s/login.png',
+    label: 'Đăng nhập Hệ thống S',
+  };
+  systemSPhoneImageSets.login.splice(1, 0, {
+    src: 'assets/app-s/login1.jpg',
+    label: 'Đăng nhập Hệ thống S — màn hình 2',
+    cropNetworkNotice: true,
+  });
+  const systemPhoneImageSets = {
+    a: systemAPhoneImageSets,
+    s: systemSPhoneImageSets,
+  };
+  const systemPhoneImageIndexes = {
+    a: Object.fromEntries(Object.keys(systemPhoneImageSets.a).map((id) => [id, 0])),
+    s: Object.fromEntries(Object.keys(systemPhoneImageSets.s).map((id) => [id, 0])),
+  };
+  let phoneImageSets = systemPhoneImageSets[activeSystem];
+  let phoneImageIndexes = systemPhoneImageIndexes[activeSystem];
+  function switchSystem(systemId) {
+    if (!systems[systemId] || systemId === activeSystem) return;
+    activeSystem = systemId;
+    screens = systems[activeSystem].screens;
+    reportScreens = screens.filter((screen) => screen.group === 'Báo cáo phải hoàn thành' && screen.id !== 'required-reports');
+    state = systemStates[activeSystem];
+    phoneImageSets = systemPhoneImageSets[activeSystem];
+    phoneImageIndexes = systemPhoneImageIndexes[activeSystem];
+    const layout = $('.app-experience-layout');
+    layout.dataset.system = activeSystem;
+    layout.setAttribute('aria-label', `Trải nghiệm ${systems[activeSystem].label}`);
+    const journeyLogo = $('#journey-system-logo');
+    journeyLogo.textContent = activeSystem.toUpperCase();
+    journeyLogo.setAttribute('aria-label', systems[activeSystem].label);
+    document.querySelectorAll('.app-system-button').forEach((element) => {
+      const selected = element.dataset.system === activeSystem;
+      element.classList.toggle('state-active', selected);
+      element.setAttribute('aria-pressed', String(selected));
+    });
+    $('#phone-screen').replaceChildren();
+    renderJourneyMenu();
+    const savedScreen = systemCurrentScreens[activeSystem];
+    show(screens.some((screen) => screen.id === savedScreen) ? savedScreen : 'schedule');
+    notice(`Đang hiển thị ${systems[activeSystem].label}.`);
+  }
   function changePhoneImage(direction) {
     const id = screens[current].id;
     const images = phoneImageSets[id];
@@ -465,7 +626,74 @@
     phoneImageIndexes[id] = (phoneImageIndexes[id] + direction + images.length) % images.length;
     renderPhone();
   }
+  function schedulePhoneImageAutoAdvance(screenId, images, imageIndex) {
+    const imageIndexes = images
+      .map((item, index) => (item.src ? index : -1))
+      .filter((index) => index >= 0);
+    if (imageIndexes.length < 2 || !images[imageIndex]?.src) return;
+    const scheduledSystem = activeSystem;
+    phoneImageAutoTimer = setTimeout(() => {
+      if (activeSystem !== scheduledSystem || screens[current]?.id !== screenId) return;
+      if (document.hidden || modal.open || imageDialog.open) {
+        schedulePhoneImageAutoAdvance(screenId, images, phoneImageIndexes[screenId]);
+        return;
+      }
+      const activeIndex = phoneImageIndexes[screenId];
+      const activePosition = Math.max(0, imageIndexes.indexOf(activeIndex));
+      phoneImageIndexes[screenId] = imageIndexes[(activePosition + 1) % imageIndexes.length];
+      renderPhone();
+    }, 3000);
+  }
+  function syncPhoneHeader(image) {
+    const phoneScreen = $('#phone-screen');
+    phoneScreen.style.removeProperty('--app-phone-header-color');
+    if (!image) return;
+    const fallbackColor = activeSystem === 's' ? '#0b6949' : '#005aba';
+    const imageFileName = image.getAttribute('src')?.split('/').pop()?.split('?')[0];
+    const configuredColor = window.ACTIVATION_PHONE_HEADER_COLORS?.[activeSystem]?.[imageFileName];
+    if (configuredColor) {
+      phoneScreen.style.setProperty('--app-phone-header-color', configuredColor);
+      return;
+    }
+
+    const sampleColor = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        const samplePoints = [0.04, 0.25, 0.5, 0.75, 0.96];
+        const sourceY = Math.round(image.naturalHeight * 0.058);
+        const sourceHeight = Math.max(2, Math.round(image.naturalHeight * 0.014));
+        const sourceWidth = Math.max(2, Math.round(image.naturalWidth * 0.045));
+        canvas.width = samplePoints.length;
+        canvas.height = 1;
+        samplePoints.forEach((point, index) => {
+          const sourceX = Math.max(0, Math.min(image.naturalWidth - sourceWidth, Math.round(image.naturalWidth * point - sourceWidth / 2)));
+          context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, index, 0, 1, 1);
+        });
+        const pixels = context.getImageData(0, 0, samplePoints.length, 1).data;
+        const colorStops = samplePoints.map((point, index) => {
+          const offset = index * 4;
+          const red = pixels[offset];
+          const green = pixels[offset + 1];
+          const blue = pixels[offset + 2];
+          const strongestChannel = Math.max(red, green, blue);
+          const weakestChannel = Math.min(red, green, blue);
+          const color = strongestChannel > 70 && strongestChannel - weakestChannel > 18
+            ? `rgb(${red}, ${green}, ${blue})`
+            : fallbackColor;
+          return `${color} ${Math.round(point * 100)}%`;
+        });
+        phoneScreen.style.setProperty('--app-phone-header-color', `linear-gradient(90deg, ${colorStops.join(', ')})`);
+      } catch {
+        phoneScreen.style.setProperty('--app-phone-header-color', fallbackColor);
+      }
+    };
+
+    if (image.complete && image.naturalWidth) sampleColor();
+    else image.addEventListener('load', sampleColor, { once: true });
+  }
   function renderPhone() {
+    clearTimeout(phoneImageAutoTimer);
     const screen = screens[current];
     const images = phoneImageSets[screen.id];
     const imageIndex = phoneImageIndexes[screen.id];
@@ -479,7 +707,7 @@
     if (images) {
       if ($('.app-schedule-image-viewport')?.dataset.screen !== screen.id) {
         const login = screen.id === 'login' ? `<div class="app-login-slide">${loginPhoneContent()}</div>` : '';
-        $('#phone-screen').innerHTML = login + `<div class="app-schedule-image-viewport" data-screen="${screen.id}">${images.map((item, index) => item.src ? `<img class="app-schedule-image${item.uncropped ? ' app-schedule-image--uncropped' : ''}" data-image-index="${index}" src="${item.src}" alt="${item.label}" role="button" tabindex="0" aria-label="Phóng to: ${item.label}" aria-haspopup="dialog" data-action="enlarge-image" title="Nhấn để xem ảnh rõ hơn" draggable="false" loading="eager" ${index === imageIndex ? '' : 'hidden'}>` : '').join('')}</div>`;
+        $('#phone-screen').innerHTML = login + `<div class="app-schedule-image-viewport" data-screen="${screen.id}">${images.map((item, index) => item.src ? `<img class="app-schedule-image${item.uncropped ? ' app-schedule-image--uncropped' : ''}${item.cropStatusOnly ? ' app-schedule-image--crop-status-only' : ''}${item.cropStatusPercent ? ` app-schedule-image--crop-status-${item.cropStatusPercent}` : ''}${item.cropNetworkNotice ? ' app-schedule-image--crop-network-notice' : ''}" data-image-index="${index}" src="${item.src}" alt="${item.label}" role="button" tabindex="0" aria-label="Phóng to: ${item.label}" aria-haspopup="dialog" data-action="enlarge-image" title="Nhấn để xem ảnh rõ hơn" draggable="false" loading="eager" ${index === imageIndex ? '' : 'hidden'}>` : '').join('')}</div>`;
         if (screen.id === 'login') {
           $('.app-eye-button').setAttribute('aria-label', 'Hiện mật khẩu');
           $('.app-eye-button').setAttribute('aria-pressed', 'false');
@@ -491,18 +719,22 @@
       document.querySelectorAll('.app-schedule-image').forEach((element) => {
         element.hidden = Number(element.dataset.imageIndex) !== imageIndex;
       });
+      syncPhoneHeader($('.app-schedule-image:not([hidden])'));
       $('#phone-screen').scrollTop = 0;
+      schedulePhoneImageAutoAdvance(screen.id, images, imageIndex);
       return;
     }
     let body = '';
     if (screen.id === 'home')
-      body = `<div class="app-home-image-wrapper"><img src="assets/app-experience/home.png" alt="Màn hình Trang chủ App" class="app-home-image" role="button" tabindex="0" aria-label="Phóng to: Màn hình Trang chủ App" aria-haspopup="dialog" data-action="enlarge-image" title="Nhấn để xem ảnh rõ hơn"></div>`;
-    $('#phone-screen').innerHTML = phoneHeader(screen) + body + '<span class="app-demo-label">SPACAP SYSTEM · Bản trải nghiệm</span>';
+      body = `<div class="app-home-image-wrapper"><img src="assets/${systems[activeSystem].assetFolder}/home.png" alt="Màn hình Trang chủ App" class="app-home-image" role="button" tabindex="0" aria-label="Phóng to: Màn hình Trang chủ App" aria-haspopup="dialog" data-action="enlarge-image" title="Nhấn để xem ảnh rõ hơn"></div>`;
+    $('#phone-screen').innerHTML = screen.id === 'home'
+      ? body
+      : phoneHeader(screen) + body + '<span class="app-demo-label">SPACAP SYSTEM · Bản trải nghiệm</span>';
     $('#phone-screen').scrollTop = 0;
   }
 
   function loginPhoneContent() {
-    return `<div class="app-phone-brand">Acacy</div><svg class="app-login-art" viewBox="18 135 273 144" role="img" aria-label="Bản đồ và cửa hàng"><image href="assets/app-experience/login.png" width="310" height="692"/></svg><form class="app-phone-login" data-form="login"><input name="username" aria-label="Tên đăng nhập" placeholder="Tên đăng nhập" autocomplete="off" required><div class="app-password-field"><input name="password" type="password" aria-label="Mật khẩu" placeholder="Mật khẩu" autocomplete="off" required>${button(icon('eye'), 'toggle-password', 'app-eye-button')}</div>${button('Quên mật khẩu?', 'reset', 'app-phone-forgot')}<button class="app-phone-submit" type="submit">Đăng nhập</button>${button('Điền tài khoản demo', 'fill-demo', 'app-phone-forgot')}</form><p class="app-phone-version"><span>Phiên bản</span><br>1.0.2.7</p><p class="app-phone-address">Tầng 2, Tòa Nhà Morning Star, số 57 Quốc Lộ 13, Phường Bình Thạnh, TPHCM</p>`;
+    return `<div class="app-phone-brand">Acacy</div><svg class="app-login-art" viewBox="18 135 273 144" role="img" aria-label="Bản đồ và cửa hàng"><image href="assets/${systems[activeSystem].assetFolder}/login.png" width="310" height="692"/></svg><form class="app-phone-login" data-form="login"><input name="username" aria-label="Tên đăng nhập" placeholder="Tên đăng nhập" autocomplete="off" required><div class="app-password-field"><input name="password" type="password" aria-label="Mật khẩu" placeholder="Mật khẩu" autocomplete="off" required>${button(icon('eye'), 'toggle-password', 'app-eye-button')}</div>${button('Quên mật khẩu?', 'reset', 'app-phone-forgot')}<button class="app-phone-submit" type="submit">Đăng nhập</button>${button('Điền tài khoản demo', 'fill-demo', 'app-phone-forgot')}</form><p class="app-phone-version"><span>Phiên bản</span><br>1.0.2.7</p><p class="app-phone-address">Tầng 2, Tòa Nhà Morning Star, số 57 Quốc Lộ 13, Phường Bình Thạnh, TPHCM</p>`;
   }
   function passwordModal() {
     openModal(
@@ -571,7 +803,8 @@
         `<p>Xóa các báo cáo và thao tác demo trong phiên này để quay về bước đăng nhập.</p>${button('Bắt đầu lại', 'confirm-restart')}`,
       ),
     'confirm-restart': () => {
-      state = freshState();
+      systemStates[activeSystem] = freshState();
+      state = systemStates[activeSystem];
       Object.keys(phoneImageIndexes).forEach((id) => { phoneImageIndexes[id] = 0; });
       modal.close();
       show('login');
@@ -590,7 +823,8 @@
     }
     const target = event.target.closest('button');
     if (!target) return;
-    if (target.dataset.screen) show(target.dataset.screen, true);
+    if (target.dataset.system) switchSystem(target.dataset.system);
+    else if (target.dataset.screen) show(target.dataset.screen, true);
     else if (target.dataset.action) actions[target.dataset.action]?.();
   });
   document.addEventListener('keydown', (event) => {
@@ -695,5 +929,6 @@
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) modal.close();
     }
   });
+  renderJourneyMenu();
   show('schedule');
 })();

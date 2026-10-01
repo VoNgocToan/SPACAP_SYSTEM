@@ -39,6 +39,22 @@
   border-radius: 3px;
 }
 
+/* Khung điện thoại màu đỏ dành riêng cho Hệ thống S. */
+.app-experience-layout[data-system='s'] .app-phone {
+  background: linear-gradient(100deg, #ff6b70, #d3262e 20%, #72080d 94%, #ff8b8f);
+  border-color: #aa151c;
+  box-shadow: 5px 0 0 #e53940, 13px 5px 0 #8f1117, 18px 9px 14px #72080d33, inset 2px 1px 3px #ffd5d7;
+}
+
+.app-experience-layout[data-system='s'] .app-phone:before {
+  background: linear-gradient(90deg, #3b0306, #f05258);
+}
+
+/* Đế điện thoại của Hệ thống S đồng bộ với khung đỏ. */
+.app-experience-layout[data-system='s'] .app-phone-pedestal {
+  filter: hue-rotate(155deg) saturate(1.45);
+}
+
 .app-phone-screen {
   position: absolute;
   inset: 9px;
@@ -71,12 +87,34 @@
 .app-phone-scene--schedule .app-phone-screen {
   padding: 0;
   overflow: hidden;
-  background: #0068c7;
+  background: var(--app-phone-header-color, #005aba);
+}
+
+/* Vùng quanh tai thỏ của Hệ thống S khớp với màu xanh lá trong ảnh App. */
+.app-experience-layout[data-system='s'] .app-phone-scene--schedule .app-phone-screen {
+  background: var(--app-phone-header-color, #008200);
+}
+
+/* Che mép ghép bị răng cưa giữa nền header và ảnh khi điện thoại được xoay. */
+.app-phone-scene--schedule .app-phone-screen::after {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  top: 23px;
+  right: 0;
+  left: 0;
+  height: 5px;
+  background: var(--app-phone-header-color, #005aba);
+  pointer-events: none;
+}
+
+.app-experience-layout[data-system='s'] .app-phone-scene--schedule .app-phone-screen::after {
+  background: var(--app-phone-header-color, #008200);
 }
 
 .app-schedule-image-viewport {
   position: absolute;
-  inset: 26px 0 0;
+  inset: 25px 0 0;
   overflow: hidden;
   contain: layout paint;
   background: #fff;
@@ -100,6 +138,35 @@
 
 /* Some source images already omit the device status bar. */
 .app-schedule-image--uncropped { top: 0; height: 100%; }
+
+/* Một số ảnh Hệ thống S có thanh trạng thái cao khoảng 4%.
+   Chỉ cắt giờ, Wi-Fi và pin để giữ trọn tiêu đề ứng dụng ngay bên dưới. */
+.app-schedule-image--crop-status-only {
+  top: -4.2%;
+  height: 104.2%;
+}
+
+/* Các bộ ảnh có thanh trạng thái cao khác nhau; chỉ cắt phần hệ thống, không cắt tiêu đề App. */
+.app-schedule-image--crop-status-5 {
+  top: -5.263%;
+  height: 105.263%;
+}
+
+.app-schedule-image--crop-status-6 {
+  top: -6.383%;
+  height: 106.383%;
+}
+
+.app-schedule-image--crop-status-7 {
+  top: -7.527%;
+  height: 107.527%;
+}
+
+/* Cắt riêng vùng trạng thái và thông báo mất kết nối ở đầu login1.jpg. */
+.app-schedule-image--crop-network-notice {
+  top: -9.6%;
+  height: 109.6%;
+}
 
 .app-schedule-arrow {
   grid-row: 1;
@@ -125,6 +192,11 @@
 .app-schedule-arrow:hover { background: #0965dc; color: #fff; }
 .app-schedule-arrow:active { background: #074ba5; color: #fff; }
 .app-schedule-arrow:focus-visible { outline: 3px solid #0965dc; outline-offset: 4px; }
+
+.app-experience-layout[data-system='s'] .app-schedule-arrow { color: #c62828; }
+.app-experience-layout[data-system='s'] .app-schedule-arrow:hover { background: #c62828; color: #fff; }
+.app-experience-layout[data-system='s'] .app-schedule-arrow:active { background: #9f1f1f; color: #fff; }
+.app-experience-layout[data-system='s'] .app-schedule-arrow:focus-visible { outline-color: #c62828; }
 
 .app-phone-scene .app-phone-pedestal { top: auto; bottom: 0; }
 

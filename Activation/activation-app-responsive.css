@@ -97,6 +97,8 @@
 }
 
 @media (max-width:1000px) {
+  .app-pattern-circles { display: none; }
+
   .app-experience-layout { grid-template-columns: 230px minmax(0, 1fr); gap: 22px; }
 
   .app-phone-scene { grid-column: 2; grid-row: 2; min-height: 680px; margin-top: 25px; }
@@ -138,6 +140,22 @@
   .app-intro-copy { font-size: 13px; }
 
   .app-intro-copy { text-align: left; }
+
+  .app-system-switcher {
+    width: 100%;
+    gap: 4px;
+    padding: 4px;
+    margin-top: 28px;
+  }
+
+  .app-system-button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+
+  .app-system-switcher + .app-experience-layout { margin-top: 24px; }
 
   .app-experience-layout {
     display: flex;
